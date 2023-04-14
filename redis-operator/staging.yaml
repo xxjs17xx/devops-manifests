@@ -1,0 +1,54 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: redis-operator-staging
+spec:
+  generators:
+  - clusters:
+      selector:
+        matchLabels:
+          env: staging
+          project: scorebet
+  template:
+    metadata:
+      name: 'redis-{{name}}'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: 'devops'
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+          - Validate=false
+          - PrunePropagationPolicy=foreground
+          - PruneLast=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+      source:
+        repoURL: https://github.com/scorebet/devops-manifests
+        path: charts/redis-operator
+        targetRevision: non-prod
+        plugin:
+          name: helm-resolver
+          env:
+            - name: REPO
+              value: https://ot-container-kit.github.io/helm-charts/
+            - name: REPO_NAME
+              value: redis-operator
+            - name: CHART_NAME
+              value: redis-operator
+            - name: CHART_VERSION
+              value: 0.14.3
+            - name: VALUES_FILE
+              value: 'staging/values-{{name}}.yaml'
+      destination:
+        name: '{{name}}'
+        namespace: 'ot-operators'
+      ignoreDifferences:
+        - kind: Service
+          jsonPointers:
+            - /spec/internalTrafficPolicy
